@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#d9480f">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon-192.png">
+<title>Recetas</title>
+<style>
+:root{--bg:#fbf7f2;--card:#fff;--tx:#241a14;--mu:#7a6a5e;--ac:#d9480f;--ac2:#fff0e6;--bd:#eadfd3;--ok:#2b8a3e}
+@media(prefers-color-scheme:dark){:root{--bg:#17120f;--card:#221b16;--tx:#f4ece4;--mu:#a8968a;--ac:#ff8a4c;--ac2:#3a2519;--bd:#372c24;--ok:#69db7c}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:12px 16px 8px;border-bottom:1px solid var(--bd)}
+h1{margin:0 0 8px;font-size:22px}
+input,textarea,select{font:inherit;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;width:100%}
+textarea{min-height:110px;resize:vertical}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:8px 0 2px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:99px;padding:5px 12px;font-size:14px;cursor:pointer}
+.chip.on{background:var(--ac);border-color:var(--ac);color:#fff}
+.chip.mini{font-size:12px;padding:2px 9px;cursor:default;background:var(--ac2);border-color:transparent;color:var(--ac)}
+main{padding:12px 16px;display:grid;gap:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:14px;cursor:pointer}
+.card h3{margin:0 0 4px;font-size:17px}
+.card p{margin:0 0 8px;color:var(--mu);font-size:14px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.muted{color:var(--mu);font-size:14px}
+.empty{text-align:center;color:var(--mu);padding:40px 16px}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--card);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom);z-index:6}
+nav button{flex:1;border:0;background:none;color:var(--mu);padding:12px 0 10px;font-size:13px;cursor:pointer}
+nav button.on{color:var(--ac);font-weight:600}
+.fab{position:fixed;right:16px;bottom:calc(76px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:50%;border:0;background:var(--ac);color:#fff;font-size:30px;box-shadow:0 4px 14px #0004;z-index:7;cursor:pointer}
+.sheet{position:fixed;inset:0;background:var(--bg);z-index:20;overflow-y:auto;padding:0 16px 40px}
+.sheet .top{position:sticky;top:0;background:var(--bg);padding:12px 0;display:flex;gap:8px;align-items:center;z-index:2}
+.btn{border:0;background:var(--ac);color:#fff;border-radius:12px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer}
+.btn.sec{background:var(--ac2);color:var(--ac)}
+.btn.del{background:none;color:#e03131;font-weight:400}
+.btn[disabled]{opacity:.5}
+.ing{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--bd);align-items:center}
+.ing input{width:20px;height:20px;flex:none}
+ol{padding-left:22px}ol li{margin-bottom:10px}
+.toast{position:fixed;left:16px;right:16px;bottom:calc(140px + env(safe-area-inset-bottom));background:#222;color:#fff;padding:12px 14px;border-radius:12px;z-index:30;font-size:14px}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid #fff6;border-top-color:#fff;border-radius:50%;animation:s 1s linear infinite;vertical-align:-3px;margin-right:6px}
+@keyframes s{to{transform:rotate(360deg)}}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1>🍳 Mis recetas</h1>
+  <input id="q" type="search" placeholder="Buscar receta, ingrediente o etiqueta…">
+  <div class="chips" id="chTipo"></div>
+  <div class="chips" id="chCocina"></div>
+</header>
+<main id="lista"></main>
+<div id="compra" class="hide" style="padding:12px 16px"></div>
+
+<button class="fab" id="fab" aria-label="Añadir receta">+</button>
+<nav>
+  <button id="nRec" class="on">Recetas</button>
+  <button id="nFav">Favoritas</button>
+  <button id="nCom">Compra</button>
+</nav>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let TOKEN=localStorage.getItem('token')||'';
+let recetas=[],opc={tipos:[],cocinas:[]};
+let F={q:'',tipo:'',cocina:'',fav:false,vista:'rec'};
+let pendiente=null;
+
+function toast(t,ms=3500){const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.appendChild(d);setTimeout(()=>d.remove(),ms)}
+
+async function api(path,o={}){
+  const r=await fetch('/api'+path,{...o,headers:{'Content-Type':'application/json','X-App-Token':TOKEN,...(o.headers||{})}});
+  if(r.status===401){pedirToken();throw new Error('Contraseña incorrecta')}
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok){const det=d.detail;const e=new Error((det&&det.mensaje)||(typeof det==='string'?det:'Error '+r.status));e.codigo=det&&det.codigo;throw e}
+  return d;
+}
+
+function pedirToken(){
+  const s=document.createElement('div');s.className='sheet';s.id='login';
+  s.innerHTML=`<h2 style="margin-top:40px">Contraseña</h2><p class="muted">La que pusiste como APP_TOKEN en el servidor.</p>
+  <input id="tk" type="password" autocomplete="current-password" placeholder="Contraseña"><br><br>
+  <button class="btn" id="tkOk">Entrar</button>`;
+  document.body.appendChild(s);
+  $('#tkOk').onclick=async()=>{TOKEN=$('#tk').value.trim();localStorage.setItem('token',TOKEN);s.remove();await cargar();if(pendiente){const p=pendiente;pendiente=null;importar(p)}};
+}
+
+async function cargar(){
+  try{recetas=await api('/recetas');pintar()}catch(e){if(e.message!=='Contraseña incorrecta')toast(e.message)}
+}
+
+function filtradas(){
+  const q=F.q.toLowerCase();
+  return recetas.filter(r=>{
+    if(F.fav&&!r.favorita)return false;
+    if(F.tipo&&r.tipo!==F.tipo)return false;
+    if(F.cocina&&r.cocina!==F.cocina)return false;
+    if(q){const h=[r.titulo,r.descripcion,r.tipo,r.cocina,(r.etiquetas||[]).join(' '),(r.ingredientes||[]).map(i=>i.nombre).join(' ')].join(' ').toLowerCase();if(!h.includes(q))return false}
+    return true;
+  });
+}
+
+function pintarChips(){
+  const usados=(k)=>[...new Set(recetas.map(r=>r[k]).filter(Boolean))].sort();
+  const mk=(id,k,lista)=>{$(id).innerHTML=lista.length?`<span class="chip ${F[k]?'':'on'}" data-k="${k}" data-v="">Todo</span>`+lista.map(v=>`<span class="chip ${F[k]===v?'on':''}" data-k="${k}" data-v="${esc(v)}">${esc(v)}</span>`).join(''):''};
+  mk('#chTipo','tipo',usados('tipo'));mk('#chCocina','cocina',usados('cocina'));
+}
+
+function pintar(){
+  pintarChips();
+  const l=$('#lista'),c=$('#compra');
+  l.classList.toggle('hide',F.vista==='com');c.classList.toggle('hide',F.vista!=='com');
+  document.querySelector('header').classList.toggle('hide',F.vista==='com');
+  $('#fab').classList.toggle('hide',F.vista==='com');
+  for(const [id,v] of [['nRec','rec'],['nFav','fav'],['nCom','com']])$('#'+id).classList.toggle('on',F.vista===v);
+  if(F.vista==='com'){pintarCompra();return}
+  const rs=filtradas();
+  l.innerHTML=rs.length?rs.map(r=>`<div class="card" data-id="${r.id}">
+    <h3>${r.favorita?'⭐ ':''}${esc(r.titulo)}</h3>
+    <p>${esc(r.descripcion||'')}</p>
+    <div class="row"><span class="chip mini">${esc(r.tipo)}</span><span class="chip mini">${esc(r.cocina)}</span>
+    ${r.tiempo?`<span class="muted">⏱ ${esc(r.tiempo)}</span>`:''}</div></div>`).join('')
+    :`<div class="empty">${recetas.length?'Nada con ese filtro.':'Aún no hay recetas.<br>Comparte un vídeo de TikTok a esta app o pulsa +'}</div>`;
+}
+
+/* ------------- detalle ------------- */
+function abrir(id){
+  const r=recetas.find(x=>x.id===id);if(!r)return;
+  const s=document.createElement('div');s.className='sheet';
+  const ing=(r.ingredientes||[]).map((i,n)=>`<label class="ing"><input type="checkbox" data-n="${n}"><span><b>${esc(i.cantidad)}</b> ${esc(i.nombre)}</span></label>`).join('');
+  const pasos=(r.pasos||[]).map(p=>`<li>${esc(p)}</li>`).join('');
+  s.innerHTML=`<div class="top"><button class="btn sec" id="x">← Volver</button><span style="flex:1"></span><button class="btn sec" id="fv">${r.favorita?'⭐ Favorita':'☆ Favorita'}</button></div>
+  <h2 style="margin:4px 0">${esc(r.titulo)}</h2>
+  <p class="muted">${esc(r.descripcion||'')}</p>
+  <div class="row"><span class="chip mini">${esc(r.tipo)}</span><span class="chip mini">${esc(r.cocina)}</span>
+  ${(r.etiquetas||[]).map(t=>`<span class="chip mini">#${esc(t)}</span>`).join('')}</div>
+  <p class="muted">${r.raciones?'🍽 '+esc(r.raciones)+'  ':''}${r.tiempo?'⏱ '+esc(r.tiempo):''}${r.autor?'  · @'+esc(r.autor.replace(/^@/,'')):''}</p>
+  <h3>Ingredientes</h3>${ing||'<p class="muted">No se indicaron.</p>'}
+  <p><button class="btn sec" id="aCompra">Añadir marcados a la compra</button> <button class="btn sec" id="aTodo">Todos</button></p>
+  <h3>Preparación</h3><ol>${pasos||'<li class="muted">Sin pasos.</li>'}</ol>
+  <h3>Notas</h3><textarea id="nt" placeholder="Tus notas…">${esc(r.notas||'')}</textarea>
+  <div class="row" style="margin-top:12px">
+    ${r.url?`<a class="btn sec" style="text-decoration:none" href="${esc(r.url)}" target="_blank" rel="noopener">Ver vídeo</a>`:''}
+    <button class="btn sec" id="ed">Cambiar tipo/cocina/etiquetas</button>
+    <button class="btn del" id="bo">Borrar</button></div>`;
+  document.body.appendChild(s);
+  const cerrar=()=>{s.remove();pintar()};
+  s.querySelector('#x').onclick=cerrar;
+  s.querySelector('#fv').onclick=async()=>{r.favorita=!r.favorita;s.querySelector('#fv').textContent=r.favorita?'⭐ Favorita':'☆ Favorita';api('/recetas/'+r.id,{method:'PATCH',body:JSON.stringify({favorita:r.favorita})}).catch(e=>toast(e.message))};
+  const añadir=(todos)=>{
+    const cs=[...s.querySelectorAll('.ing input')];const sel=cs.filter(c=>todos||c.checked).map(c=>r.ingredientes[+c.dataset.n]);
+    if(!sel.length)return toast('Marca algún ingrediente');
+    const lista=getCompra();sel.forEach(i=>lista.push({t:`${i.cantidad} ${i.nombre}`.trim(),r:r.titulo,ok:false}));setCompra(lista);toast(`${sel.length} añadidos a la compra`)};
+  s.querySelector('#aCompra').onclick=()=>añadir(false);s.querySelector('#aTodo').onclick=()=>añadir(true);
+  s.querySelector('#nt').onchange=e=>{r.notas=e.target.value;api('/recetas/'+r.id,{method:'PATCH',body:JSON.stringify({notas:r.notas})}).catch(er=>toast(er.message))};
+  s.querySelector('#bo').onclick=async()=>{if(!confirm('¿Borrar esta receta?'))return;await api('/recetas/'+r.id,{method:'DELETE'});recetas=recetas.filter(x=>x.id!==r.id);cerrar()};
+  s.querySelector('#ed').onclick=()=>editar(r,s);
+}
+
+function editar(r,sheetPadre){
+  const s=document.createElement('div');s.className='sheet';
+  const op=(l,v)=>l.map(x=>`<option ${x===v?'selected':''}>${esc(x)}</option>`).join('');
+  s.innerHTML=`<div class="top"><button class="btn sec" id="x">← Cancelar</button></div><h2>Editar</h2>
+  <label class="muted">Título</label><input id="e1" value="${esc(r.titulo)}"><br><br>
+  <label class="muted">Tipo</label><select id="e2">${op(opc.tipos,r.tipo)}</select><br><br>
+  <label class="muted">Cocina</label><select id="e3">${op(opc.cocinas,r.cocina)}</select><br><br>
+  <label class="muted">Etiquetas (separadas por comas)</label><input id="e4" value="${esc((r.etiquetas||[]).join(', '))}"><br><br>
+  <button class="btn" id="ok">Guardar</button>`;
+  document.body.appendChild(s);
+  s.querySelector('#x').onclick=()=>s.remove();
+  s.querySelector('#ok').onclick=async()=>{
+    const d={titulo:s.querySelector('#e1').value.trim()||r.titulo,tipo:s.querySelector('#e2').value,cocina:s.querySelector('#e3').value,
+      etiquetas:s.querySelector('#e4').value.split(',').map(t=>t.trim().toLowerCase()).filter(Boolean)};
+    try{const n=await api('/recetas/'+r.id,{method:'PATCH',body:JSON.stringify(d)});Object.assign(r,n);s.remove();sheetPadre.remove();pintar();abrir(r.id)}catch(e){toast(e.message)}
+  };
+}
+
+/* ------------- compra ------------- */
+const getCompra=()=>{try{return JSON.parse(localStorage.getItem('compra')||'[]')}catch{return[]}};
+const setCompra=l=>{localStorage.setItem('compra',JSON.stringify(l));if(F.vista==='com')pintarCompra()};
+function pintarCompra(){
+  const l=getCompra();
+  $('#compra').innerHTML=`<h1>🛒 Lista de la compra</h1>`+(l.length?l.map((x,i)=>`<label class="ing"><input type="checkbox" data-i="${i}" ${x.ok?'checked':''}><span style="${x.ok?'text-decoration:line-through;opacity:.5':''}">${esc(x.t)} <span class="muted">· ${esc(x.r)}</span></span></label>`).join('')+
+    `<p><button class="btn sec" id="lh">Quitar marcados</button> <button class="btn del" id="lv">Vaciar</button></p>`:'<div class="empty">Vacía. Añade ingredientes desde una receta.</div>');
+  $('#compra').querySelectorAll('input').forEach(c=>c.onchange=()=>{const l=getCompra();l[+c.dataset.i].ok=c.checked;setCompra(l)});
+  const lh=$('#lh');if(lh)lh.onclick=()=>setCompra(getCompra().filter(x=>!x.ok));
+  const lv=$('#lv');if(lv)lv.onclick=()=>{if(confirm('¿Vaciar la lista?'))setCompra([])};
+}
+
+/* ------------- importar ------------- */
+async function importar(entrada,extra=''){
+  if(!TOKEN){pendiente=entrada;return pedirToken()}
+  const s=document.createElement('div');s.className='sheet';s.id='imp';
+  s.innerHTML=`<h2 style="margin-top:40px"><span class="spin" style="border-color:#d9480f55;border-top-color:#d9480f"></span>Leyendo la receta…</h2>
+  <p class="muted">Descargando el vídeo, transcribiendo el audio y ordenando la receta. Tarda entre 10 y 40 segundos.</p>`;
+  document.body.appendChild(s);
+  try{
+    const d=await api('/importar',{method:'POST',body:JSON.stringify({entrada,texto_extra:extra})});
+    s.remove();
+    if(!recetas.find(x=>x.id===d.receta.id))recetas.unshift(d.receta);
+    F={...F,q:'',tipo:'',cocina:'',vista:'rec'};$('#q').value='';pintar();
+    toast(d.repetida?'Ya la tenías guardada':(d.aviso||'Receta guardada'));abrir(d.receta.id);
+  }catch(e){
+    s.remove();
+    if(e.codigo==='sin_media'){pedirTexto(entrada,e.message)}else toast(e.message,6000);
+  }
+}
+function pedirTexto(entrada,msg){
+  const s=document.createElement('div');s.className='sheet';
+  s.innerHTML=`<div class="top"><button class="btn sec" id="x">Cancelar</button></div><h2>Falta texto</h2><p class="muted">${esc(msg)}</p>
+  <textarea id="tx" placeholder="Pega aquí la descripción del vídeo o la receta…"></textarea><br><br><button class="btn" id="ok">Intentar de nuevo</button>`;
+  document.body.appendChild(s);
+  s.querySelector('#x').onclick=()=>s.remove();
+  s.querySelector('#ok').onclick=()=>{const t=s.querySelector('#tx').value.trim();if(!t)return;s.remove();importar(entrada,t)};
+}
+function nuevaReceta(){
+  const s=document.createElement('div');s.className='sheet';
+  s.innerHTML=`<div class="top"><button class="btn sec" id="x">Cancelar</button></div><h2>Añadir receta</h2>
+  <p class="muted">Pega un enlace de TikTok/Instagram/YouTube, o pega directamente el texto de una receta.</p>
+  <textarea id="en" placeholder="https://vm.tiktok.com/…"></textarea><br><br><button class="btn" id="ok">Importar</button>`;
+  document.body.appendChild(s);
+  s.querySelector('#x').onclick=()=>s.remove();
+  s.querySelector('#ok').onclick=()=>{const t=s.querySelector('#en').value.trim();if(!t)return;s.remove();importar(t)};
+}
+
+/* ------------- eventos ------------- */
+$('#q').oninput=e=>{F.q=e.target.value;pintar()};
+document.addEventListener('click',e=>{
+  const ch=e.target.closest('.chip[data-k]');if(ch){F[ch.dataset.k]=ch.dataset.v;pintar();return}
+  const cd=e.target.closest('.card[data-id]');if(cd)abrir(cd.dataset.id);
+});
+$('#fab').onclick=nuevaReceta;
+$('#nRec').onclick=()=>{F.vista='rec';F.fav=false;pintar()};
+$('#nFav').onclick=()=>{F.vista='fav';F.fav=true;pintar()};
+$('#nCom').onclick=()=>{F.vista='com';pintar()};
+
+(async function init(){
+  if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
+  try{opc=await (await fetch('/api/opciones')).json()}catch{}
+  const p=new URLSearchParams(location.search);
+  const compartido=[p.get('url'),p.get('text'),p.get('title')].filter(Boolean).join(' ').trim();
+  if(compartido)history.replaceState(null,'','/');
+  if(!TOKEN){if(compartido)pendiente=compartido;pedirToken();return}
+  await cargar();
+  if(compartido)importar(compartido);
+})();
+</script>
+</body>
+</html>
