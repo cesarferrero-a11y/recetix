@@ -40,11 +40,30 @@ app = FastAPI(title="Recetas")
 
 
 # ---------------------------------------------------------------- seguridad
-def auth(x_app_token: str = Header(default="")):
-    if not APP_TOKEN:
+def _usuarios() -> dict:
+    """contraseña -> usuario. APP_TOKEN es el usuario principal; USUARIOS='ana:clave,luis:clave2' añade más."""
+    d = {}
+    if APP_TOKEN.strip():
+        d[APP_TOKEN.strip()] = "principal"
+    for par in os.getenv("USUARIOS", "").split(","):
+        if ":" in par:
+            nombre, clave = par.split(":", 1)
+            if nombre.strip() and clave.strip():
+                d[clave.strip()] = re.sub(r"[^a-z0-9_-]", "", nombre.strip().lower()) or "extra"
+    return d
+
+
+def auth(x_app_token: str = Header(default="")) -> str:
+    usuarios = _usuarios()
+    if not usuarios:
         raise HTTPException(500, "Falta el secreto APP_TOKEN en el servidor")
-    if not hmac.compare_digest(x_app_token.encode(), APP_TOKEN.encode()):
+    encontrado = None
+    for clave, nombre in usuarios.items():
+        if hmac.compare_digest(x_app_token.strip().encode(), clave.encode()):
+            encontrado = nombre
+    if not encontrado:
         raise HTTPException(401, "Contraseña incorrecta")
+    return encontrado
 
 
 UUID_RE = re.compile(r"^[0-9a-fA-F-]{36}$")
@@ -279,18 +298,18 @@ def normalizar(url: str) -> str:
 @app.get("/api/health")
 async def health():
     return {"ok": True, "groq": bool(GROQ_API_KEY), "gemini": bool(GEMINI_API_KEY),
-            "supabase": bool(SUPABASE_URL and SUPABASE_KEY), "token": bool(APP_TOKEN)}
+            "supabase": bool(SUPABASE_URL and SUPABASE_KEY), "token": bool(_usuarios()), "usuarios": len(_usuarios())}
 
 
-@app.get("/api/recetas", dependencies=[Depends(auth)])
-async def listar():
+@app.get("/api/recetas")
+async def listar(usuario: str = Depends(auth)):
     cols = ("id,created_at,url,titulo,descripcion,raciones,tiempo,ingredientes,pasos,"
             "tipo,cocina,etiquetas,favorita,autor,notas,con_imagen")
-    return await sb("GET", f"?select={cols}&order=created_at.desc&limit=1000")
+    return await sb("GET", f"?select={cols}&order=created_at.desc&limit=1000&usuario=eq.{usuario}")
 
 
-@app.post("/api/importar", dependencies=[Depends(auth)])
-async def importar(body: Entrada):
+@app.post("/api/importar")
+async def importar(body: Entrada, usuario: str = Depends(auth)):
     m = URL_RE.search(body.entrada)
     url = normalizar(m.group(0)) if m else ""
     contexto_extra = body.texto_extra.strip()
@@ -298,7 +317,7 @@ async def importar(body: Entrada):
     aviso = ""
 
     if url:
-        previa = await sb("GET", f"?url=eq.{quote(url, safe='')}&select=*&limit=1")
+        previa = await sb("GET", f"?url=eq.{quote(url, safe='')}&usuario=eq.{usuario}&select=*&limit=1")
         if previa:
             previa[0].pop("imagen", None)
             return {"receta": previa[0], "repetida": True}
@@ -333,7 +352,7 @@ async def importar(body: Entrada):
         raise HTTPException(422, detail={"codigo": "no_receta",
                                          "mensaje": "Esto no parece una receta."})
     fila = limpiar(datos)
-    fila.update({"url": url or None, "autor": autor, "transcripcion": transcripcion[:20000],
+    fila.update({"usuario": usuario, "url": url or None, "autor": autor, "transcripcion": transcripcion[:20000],
                  "imagen": imagen or None, "con_imagen": bool(imagen)})
     creada = await sb("POST", "", json=fila, headers={"Prefer": "return=representation"})
     receta = creada[0]
@@ -350,20 +369,20 @@ class Cambios(BaseModel):
     notas: str | None = None
 
 
-@app.patch("/api/recetas/{rid}", dependencies=[Depends(auth)])
-async def editar(rid: str, c: Cambios):
+@app.patch("/api/recetas/{rid}")
+async def editar(rid: str, c: Cambios, usuario: str = Depends(auth)):
     check_id(rid)
     datos = c.model_dump(exclude_none=True)
     if not datos:
         raise HTTPException(400, "Nada que cambiar")
-    r = await sb("PATCH", f"?id=eq.{rid}", json=datos, headers={"Prefer": "return=representation"})
+    r = await sb("PATCH", f"?id=eq.{rid}&usuario=eq.{usuario}", json=datos, headers={"Prefer": "return=representation"})
     return r[0] if r else {}
 
 
-@app.delete("/api/recetas/{rid}", dependencies=[Depends(auth)])
-async def borrar(rid: str):
+@app.delete("/api/recetas/{rid}")
+async def borrar(rid: str, usuario: str = Depends(auth)):
     check_id(rid)
-    await sb("DELETE", f"?id=eq.{rid}")
+    await sb("DELETE", f"?id=eq.{rid}&usuario=eq.{usuario}")
     return {"ok": True}
 
 
@@ -378,11 +397,11 @@ async def imagen_receta(rid: str):
                     headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
-@app.post("/api/recetas/{rid}/imagen", dependencies=[Depends(auth)])
-async def refrescar_imagen(rid: str):
+@app.post("/api/recetas/{rid}/imagen")
+async def refrescar_imagen(rid: str, usuario: str = Depends(auth)):
     """Busca la portada de una receta guardada antes de que existieran las fotos."""
     check_id(rid)
-    fila = await sb("GET", f"?id=eq.{rid}&select=url")
+    fila = await sb("GET", f"?id=eq.{rid}&usuario=eq.{usuario}&select=url")
     if not fila or not fila[0].get("url"):
         raise HTTPException(404, "Esta receta no tiene enlace de vídeo")
     url = fila[0]["url"]
@@ -400,7 +419,7 @@ async def refrescar_imagen(rid: str):
         img = await bajar_miniatura(miniatura, tmp)
     if not img:
         raise HTTPException(502, "No se pudo obtener la foto de ese vídeo")
-    await sb("PATCH", f"?id=eq.{rid}", json={"imagen": img, "con_imagen": True})
+    await sb("PATCH", f"?id=eq.{rid}&usuario=eq.{usuario}", json={"imagen": img, "con_imagen": True})
     return {"ok": True}
 
 
