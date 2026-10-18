@@ -15,10 +15,16 @@ create table if not exists public.recetas (
   favorita boolean not null default false,
   autor text default '',
   transcripcion text default '',
-  notas text default ''
+  notas text default '',
+  imagen text,
+  con_imagen boolean not null default false
 );
 
 create index if not exists recetas_url_idx on public.recetas (url);
 
 -- Seguridad: nadie accede directamente desde internet; solo tu servidor con la clave secreta.
 alter table public.recetas enable row level security;
+
+-- Si la tabla ya existía (instalación anterior), ejecuta solo esto:
+alter table public.recetas add column if not exists imagen text;
+alter table public.recetas add column if not exists con_imagen boolean not null default false;

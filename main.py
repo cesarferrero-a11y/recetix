@@ -4,6 +4,7 @@ Flujo: enlace -> yt-dlp (audio + descripción) -> Groq Whisper (transcripción)
        -> Gemini (estructura y etiqueta; Groq LLM como respaldo) -> Supabase.
 """
 import asyncio
+import base64
 import hmac
 import json
 import os
@@ -15,7 +16,7 @@ from urllib.parse import quote
 
 import httpx
 from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -131,10 +132,33 @@ async def oembed(url: str) -> dict:
         if r.status_code == 200:
             d = r.json()
             return {"description": d.get("title", ""), "uploader": d.get("author_name", ""),
-                    "title": d.get("title", "")}
+                    "title": d.get("title", ""), "thumbnail": d.get("thumbnail_url", "")}
     except Exception:
         pass
     return {}
+
+
+async def bajar_miniatura(url_img: str, tmp: str) -> str:
+    """Descarga la portada, la reduce a 480 px de ancho y la devuelve en base64 (JPEG).
+    Las URL de TikTok caducan, por eso guardamos la imagen en nuestra base de datos."""
+    if not url_img:
+        return ""
+    try:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as c:
+            r = await c.get(url_img, headers={
+                "User-Agent": "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 "
+                              "(KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36"})
+        if r.status_code != 200 or len(r.content) < 500:
+            return ""
+        src, dst = Path(tmp) / "thumb_src", Path(tmp) / "thumb.jpg"
+        src.write_bytes(r.content)
+        code, _, _ = await run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(src),
+                                "-vf", "scale=480:-2", "-frames:v", "1", "-q:v", "5", str(dst)], 30)
+        if code == 0 and dst.exists() and 0 < dst.stat().st_size < 400_000:
+            return base64.b64encode(dst.read_bytes()).decode()
+    except Exception:  # noqa: BLE001  (la foto es opcional)
+        pass
+    return ""
 
 
 # ---------------------------------------------------------------- IA
@@ -261,7 +285,7 @@ async def health():
 @app.get("/api/recetas", dependencies=[Depends(auth)])
 async def listar():
     cols = ("id,created_at,url,titulo,descripcion,raciones,tiempo,ingredientes,pasos,"
-            "tipo,cocina,etiquetas,favorita,autor,notas")
+            "tipo,cocina,etiquetas,favorita,autor,notas,con_imagen")
     return await sb("GET", f"?select={cols}&order=created_at.desc&limit=1000")
 
 
@@ -270,12 +294,13 @@ async def importar(body: Entrada):
     m = URL_RE.search(body.entrada)
     url = normalizar(m.group(0)) if m else ""
     contexto_extra = body.texto_extra.strip()
-    descripcion = autor = transcripcion = ""
+    descripcion = autor = transcripcion = imagen = ""
     aviso = ""
 
     if url:
         previa = await sb("GET", f"?url=eq.{quote(url, safe='')}&select=*&limit=1")
         if previa:
+            previa[0].pop("imagen", None)
             return {"receta": previa[0], "repetida": True}
         with tempfile.TemporaryDirectory() as tmp:
             info, audio, err = await descargar(url, tmp)
@@ -283,6 +308,8 @@ async def importar(body: Entrada):
                 info = await oembed(url)
             descripcion = (info.get("description") or info.get("title") or "").strip()
             autor = (info.get("uploader") or info.get("channel") or "").strip()
+            miniatura = info.get("thumbnail") or (await oembed(url)).get("thumbnail") or ""
+            imagen = await bajar_miniatura(miniatura, tmp)
             if audio:
                 try:
                     transcripcion = await transcribir(audio)
@@ -306,9 +333,12 @@ async def importar(body: Entrada):
         raise HTTPException(422, detail={"codigo": "no_receta",
                                          "mensaje": "Esto no parece una receta."})
     fila = limpiar(datos)
-    fila.update({"url": url or None, "autor": autor, "transcripcion": transcripcion[:20000]})
+    fila.update({"url": url or None, "autor": autor, "transcripcion": transcripcion[:20000],
+                 "imagen": imagen or None, "con_imagen": bool(imagen)})
     creada = await sb("POST", "", json=fila, headers={"Prefer": "return=representation"})
-    return {"receta": creada[0], "repetida": False, "aviso": aviso}
+    receta = creada[0]
+    receta.pop("imagen", None)  # la foto se sirve aparte, no pesa en la lista
+    return {"receta": receta, "repetida": False, "aviso": aviso}
 
 
 class Cambios(BaseModel):
@@ -334,6 +364,43 @@ async def editar(rid: str, c: Cambios):
 async def borrar(rid: str):
     check_id(rid)
     await sb("DELETE", f"?id=eq.{rid}")
+    return {"ok": True}
+
+
+@app.get("/api/img/{rid}")
+async def imagen_receta(rid: str):
+    """Foto de la receta. Pública a propósito (la UUID no es adivinable) para poder usar <img>."""
+    check_id(rid)
+    fila = await sb("GET", f"?id=eq.{rid}&select=imagen")
+    if not fila or not fila[0].get("imagen"):
+        raise HTTPException(404, "Sin imagen")
+    return Response(base64.b64decode(fila[0]["imagen"]), media_type="image/jpeg",
+                    headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
+@app.post("/api/recetas/{rid}/imagen", dependencies=[Depends(auth)])
+async def refrescar_imagen(rid: str):
+    """Busca la portada de una receta guardada antes de que existieran las fotos."""
+    check_id(rid)
+    fila = await sb("GET", f"?id=eq.{rid}&select=url")
+    if not fila or not fila[0].get("url"):
+        raise HTTPException(404, "Esta receta no tiene enlace de vídeo")
+    url = fila[0]["url"]
+    with tempfile.TemporaryDirectory() as tmp:
+        miniatura = ""
+        code, out, _ = await run(["yt-dlp", "--no-playlist", "--no-warnings", "--skip-download",
+                                  "--dump-single-json", url], 60)
+        if code == 0:
+            try:
+                miniatura = json.loads(out).get("thumbnail") or ""
+            except Exception:  # noqa: BLE001
+                pass
+        if not miniatura:
+            miniatura = (await oembed(url)).get("thumbnail", "")
+        img = await bajar_miniatura(miniatura, tmp)
+    if not img:
+        raise HTTPException(502, "No se pudo obtener la foto de ese vídeo")
+    await sb("PATCH", f"?id=eq.{rid}", json={"imagen": img, "con_imagen": True})
     return {"ok": True}
 
 

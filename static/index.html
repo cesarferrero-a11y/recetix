@@ -21,13 +21,17 @@ textarea{min-height:110px;resize:vertical}
 .chip{flex:none;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:99px;padding:5px 12px;font-size:14px;cursor:pointer}
 .chip.on{background:var(--ac);border-color:var(--ac);color:#fff}
 .chip.mini{font-size:12px;padding:2px 9px;cursor:default;background:var(--ac2);border-color:transparent;color:var(--ac)}
-main{padding:12px 16px;display:grid;gap:12px}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:14px;cursor:pointer}
-.card h3{margin:0 0 4px;font-size:17px}
-.card p{margin:0 0 8px;color:var(--mu);font-size:14px}
+main{padding:12px 16px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.card{position:relative;aspect-ratio:3/4;border-radius:16px;overflow:hidden;cursor:pointer;background:var(--ac2);border:1px solid var(--bd)}
+.card img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.card .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:56px;background:linear-gradient(135deg,var(--ac2),var(--bd))}
+.card .ov{position:absolute;left:0;right:0;bottom:0;padding:34px 10px 10px;background:linear-gradient(transparent,#000d);color:#fff}
+.card .ov h3{margin:0;font-size:15px;line-height:1.25;color:#fff;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.card .ov small{display:block;margin-top:3px;opacity:.8;font-size:12px}
+.card .star{position:absolute;top:8px;right:8px;background:#0008;color:#fff;border-radius:99px;padding:2px 8px;font-size:13px}
 .row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .muted{color:var(--mu);font-size:14px}
-.empty{text-align:center;color:var(--mu);padding:40px 16px}
+.empty{grid-column:1/-1;text-align:center;color:var(--mu);padding:40px 16px}
 nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--card);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom);z-index:6}
 nav button{flex:1;border:0;background:none;color:var(--mu);padding:12px 0 10px;font-size:13px;cursor:pointer}
 nav button.on{color:var(--ac);font-weight:600}
@@ -112,6 +116,7 @@ function pintarChips(){
   mk('#chTipo','tipo',usados('tipo'));mk('#chCocina','cocina',usados('cocina'));
 }
 
+const EMO={'pasta':'🍝','postre':'🍰','ensalada':'🥗','sopa y crema':'🍲','arroz':'🥘','legumbres':'🫘','carne':'🥩','pescado y marisco':'🐟','verdura':'🥦','huevos':'🍳','pizza y pan':'🍕','snack y bocadillo':'🥪','bebida':'🍹','salsa':'🥫','aperitivo':'🍢'};
 function pintar(){
   pintarChips();
   const l=$('#lista'),c=$('#compra');
@@ -122,10 +127,9 @@ function pintar(){
   if(F.vista==='com'){pintarCompra();return}
   const rs=filtradas();
   l.innerHTML=rs.length?rs.map(r=>`<div class="card" data-id="${r.id}">
-    <h3>${r.favorita?'⭐ ':''}${esc(r.titulo)}</h3>
-    <p>${esc(r.descripcion||'')}</p>
-    <div class="row"><span class="chip mini">${esc(r.tipo)}</span><span class="chip mini">${esc(r.cocina)}</span>
-    ${r.tiempo?`<span class="muted">⏱ ${esc(r.tiempo)}</span>`:''}</div></div>`).join('')
+    ${r.con_imagen?`<img loading="lazy" src="/api/img/${r.id}" alt="">`:`<div class="ph">${EMO[r.tipo]||'🍽'}</div>`}
+    ${r.favorita?'<span class="star">⭐</span>':''}
+    <div class="ov"><h3>${esc(r.titulo)}</h3><small>${esc(r.tipo)} · ${esc(r.cocina)}${r.tiempo?' · ⏱ '+esc(r.tiempo):''}</small></div></div>`).join('')
     :`<div class="empty">${recetas.length?'Nada con ese filtro.':'Aún no hay recetas.<br>Comparte un vídeo de TikTok a esta app o pulsa +'}</div>`;
 }
 
@@ -136,6 +140,7 @@ function abrir(id){
   const ing=(r.ingredientes||[]).map((i,n)=>`<label class="ing"><input type="checkbox" data-n="${n}"><span><b>${esc(i.cantidad)}</b> ${esc(i.nombre)}</span></label>`).join('');
   const pasos=(r.pasos||[]).map(p=>`<li>${esc(p)}</li>`).join('');
   s.innerHTML=`<div class="top"><button class="btn sec" id="x">← Volver</button><span style="flex:1"></span><button class="btn sec" id="fv">${r.favorita?'⭐ Favorita':'☆ Favorita'}</button></div>
+  ${r.con_imagen?`<img src="/api/img/${r.id}" alt="" style="width:100%;max-height:340px;object-fit:cover;border-radius:16px;margin-bottom:8px">`:''}
   <h2 style="margin:4px 0">${esc(r.titulo)}</h2>
   <p class="muted">${esc(r.descripcion||'')}</p>
   <div class="row"><span class="chip mini">${esc(r.tipo)}</span><span class="chip mini">${esc(r.cocina)}</span>
@@ -147,6 +152,7 @@ function abrir(id){
   <h3>Notas</h3><textarea id="nt" placeholder="Tus notas…">${esc(r.notas||'')}</textarea>
   <div class="row" style="margin-top:12px">
     ${r.url?`<a class="btn sec" style="text-decoration:none" href="${esc(r.url)}" target="_blank" rel="noopener">Ver vídeo</a>`:''}
+    ${!r.con_imagen&&r.url?'<button class="btn sec" id="ft">Obtener foto</button>':''}
     <button class="btn sec" id="ed">Cambiar tipo/cocina/etiquetas</button>
     <button class="btn del" id="bo">Borrar</button></div>`;
   document.body.appendChild(s);
@@ -161,6 +167,10 @@ function abrir(id){
   s.querySelector('#nt').onchange=e=>{r.notas=e.target.value;api('/recetas/'+r.id,{method:'PATCH',body:JSON.stringify({notas:r.notas})}).catch(er=>toast(er.message))};
   s.querySelector('#bo').onclick=async()=>{if(!confirm('¿Borrar esta receta?'))return;await api('/recetas/'+r.id,{method:'DELETE'});recetas=recetas.filter(x=>x.id!==r.id);cerrar()};
   s.querySelector('#ed').onclick=()=>editar(r,s);
+  const ft=s.querySelector('#ft');
+  if(ft)ft.onclick=async()=>{ft.disabled=true;ft.textContent='Buscando…';
+    try{await api('/recetas/'+r.id+'/imagen',{method:'POST'});r.con_imagen=true;s.remove();pintar();abrir(r.id)}
+    catch(e){toast(e.message,5000);ft.disabled=false;ft.textContent='Obtener foto'}};
 }
 
 function editar(r,sheetPadre){
