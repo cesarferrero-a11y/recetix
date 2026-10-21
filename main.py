@@ -428,6 +428,13 @@ async def opciones():
     return {"tipos": TIPOS, "cocinas": COCINAS}
 
 
+# ---------------------------------------------------------------- Guardados IA (segunda app)
+import ia  # noqa: E402  (al final: ia.py usa las funciones definidas arriba)
+
+app.include_router(ia.router)
+app.include_router(ia.web)
+
+
 # ---------------------------------------------------------------- estáticos
 @app.get("/sw.js")
 async def sw():

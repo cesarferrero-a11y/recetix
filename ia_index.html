@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#5b3df5">
+<link rel="manifest" href="/ia/manifest.json">
+<link rel="icon" href="/ia/icon-192.png">
+<title>Guardados IA</title>
+<style>
+:root{--bg:#f6f5fc;--card:#fff;--tx:#1a1830;--mu:#6c6a85;--ac:#5b3df5;--ac2:#ebe7ff;--bd:#e3e0f3;--ok:#2b8a3e;--wa:#fff4d6}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1020;--card:#181a30;--tx:#eeedfa;--mu:#a09fbd;--ac:#8f7bff;--ac2:#25225a;--bd:#2a2c4a;--ok:#69db7c;--wa:#3a3216}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-bottom:calc(76px + env(safe-area-inset-bottom))}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:12px 16px 8px;border-bottom:1px solid var(--bd)}
+h1{margin:0 0 8px;font-size:22px}
+input,textarea,select{font:inherit;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;width:100%}
+textarea{min-height:120px;resize:vertical}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:8px 0 2px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:99px;padding:5px 12px;font-size:14px;cursor:pointer}
+.chip.on{background:var(--ac);border-color:var(--ac);color:#fff}
+.chip.mini{font-size:12px;padding:2px 9px;cursor:default;background:var(--ac2);border-color:transparent;color:var(--ac)}
+.chip.tool{background:transparent;border:1px solid var(--bd);color:var(--mu)}
+main{padding:12px 16px;display:flex;flex-direction:column;gap:10px}
+.v{display:flex;gap:12px;background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:10px;cursor:pointer;position:relative}
+.v .th{flex:none;width:68px;height:92px;border-radius:10px;overflow:hidden;background:var(--ac2);display:flex;align-items:center;justify-content:center;font-size:28px}
+.v .th img{width:100%;height:100%;object-fit:cover}
+.v .bd{min-width:0;flex:1}
+.v h3{margin:0 0 3px;font-size:15.5px;line-height:1.25;padding-right:22px}
+.v p{margin:0 0 6px;font-size:13.5px;color:var(--mu);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.v .st{position:absolute;top:8px;right:10px;font-size:14px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.muted{color:var(--mu);font-size:14px}
+.empty{text-align:center;color:var(--mu);padding:40px 16px}
+nav{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--card);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom);z-index:6}
+nav button{flex:1;border:0;background:none;color:var(--mu);padding:12px 0 10px;font-size:13px;cursor:pointer}
+nav button.on{color:var(--ac);font-weight:600}
+.fab{position:fixed;right:16px;bottom:calc(76px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:50%;border:0;background:var(--ac);color:#fff;font-size:30px;box-shadow:0 4px 14px #0004;z-index:7;cursor:pointer}
+.sheet{position:fixed;inset:0;background:var(--bg);z-index:20;overflow-y:auto;padding:0 16px 40px}
+.sheet .top{position:sticky;top:0;background:var(--bg);padding:12px 0;display:flex;gap:8px;align-items:center;z-index:2}
+.btn{border:0;background:var(--ac);color:#fff;border-radius:12px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer}
+.btn.sec{background:var(--ac2);color:var(--ac)}
+.btn.del{background:none;color:#e03131;font-weight:400}
+.btn.sm{padding:5px 11px;font-size:13px}
+.btn[disabled]{opacity:.5}
+.box{background:var(--wa);border-radius:12px;padding:10px 12px;margin:10px 0}
+pre{white-space:pre-wrap;word-break:break-word;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:10px 12px;margin:6px 0 4px;font:13.5px/1.45 ui-monospace,Menlo,Consolas,monospace}
+ul.k{padding-left:20px}ul.k li{margin-bottom:6px}
+.toast{position:fixed;left:16px;right:16px;bottom:calc(140px + env(safe-area-inset-bottom));background:#222;color:#fff;padding:12px 14px;border-radius:12px;z-index:30;font-size:14px}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid #5b3df555;border-top-color:#5b3df5;border-radius:50%;animation:s 1s linear infinite;vertical-align:-3px;margin-right:6px}
+@keyframes s{to{transform:rotate(360deg)}}
+.prog{height:8px;background:var(--bd);border-radius:99px;overflow:hidden;margin:10px 0}
+.prog i{display:block;height:100%;background:var(--ac);width:0;transition:width .3s}
+.lg{font-size:13px;color:var(--mu);max-height:34vh;overflow:auto;border:1px solid var(--bd);border-radius:12px;padding:8px 10px;background:var(--card)}
+.lg div{padding:2px 0;word-break:break-all}
+.hide{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1>✨ Guardados IA</h1>
+  <input id="q" type="search" placeholder="Buscar: prompt, herramienta, tema, lo que se dice…">
+  <div class="chips" id="chCat"></div>
+  <div class="chips" id="chHer"></div>
+</header>
+<main id="lista"></main>
+
+<button class="fab" id="fab" aria-label="Añadir vídeo">+</button>
+<nav>
+  <button id="nTodos" class="on">Todos</button>
+  <button id="nFav">Favoritos</button>
+  <button id="nPend">Por probar</button>
+</nav>
+
+<script>
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let TOKEN=localStorage.getItem('token')||'';
+let videos=[],opc={categorias:[]};
+let F={q:'',cat:'',her:'',vista:'todos'};
+let pendiente=null;
+const API='/api/ia';
+const EMO={'prompts':'💬','tutorial':'🎓','agentes y automatización':'🤖','código y desarrollo':'💻','imágenes y vídeo IA':'🎨','productividad':'⚡','negocio y dinero':'💼','noticias y novedades':'📰','herramienta nueva':'🧰','trucos y consejos':'💡','aprender IA':'📚'};
+
+function toast(t,ms=3500){const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.appendChild(d);setTimeout(()=>d.remove(),ms)}
+const dormir=ms=>new Promise(r=>setTimeout(r,ms));
+
+async function api(path,o={}){
+  const r=await fetch(API+path,{...o,headers:{'Content-Type':'application/json','X-App-Token':TOKEN,...(o.headers||{})}});
+  if(r.status===401){pedirToken();throw new Error('Contraseña incorrecta')}
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok){const det=d.detail;const e=new Error((det&&det.mensaje)||(typeof det==='string'?det:'Error '+r.status));e.codigo=det&&det.codigo;throw e}
+  return d;
+}
+
+function pedirToken(){
+  if($('#login'))return;
+  const s=document.createElement('div');s.className='sheet';s.id='login';
+  s.innerHTML=`<h2 style="margin-top:40px">Contraseña</h2><p class="muted">La misma que usas en la app de recetas.</p>
+  <input id="tk" type="password" autocomplete="current-password" placeholder="Contraseña"><br><br>
+  <button class="btn" id="tkOk">Entrar</button>`;
+  document.body.appendChild(s);
+  $('#tkOk').onclick=async()=>{TOKEN=$('#tk').value.trim();localStorage.setItem('token',TOKEN);s.remove();await cargar();if(pendiente){const p=pendiente;pendiente=null;importar(p)}};
+}
+
+async function cargar(q=''){
+  try{videos=await api('/videos'+(q?'?q='+encodeURIComponent(q):''));pintar()}
+  catch(e){if(e.message!=='Contraseña incorrecta')toast(e.message)}
+}
+
+function filtrados(){
+  return videos.filter(v=>{
+    if(F.vista==='fav'&&!v.favorito)return false;
+    if(F.vista==='pend'&&v.probado)return false;
+    if(F.cat&&v.categoria!==F.cat)return false;
+    if(F.her&&!(v.herramientas||[]).some(h=>h.toLowerCase()===F.her.toLowerCase()))return false;
+    return true;
+  });
+}
+
+function pintarChips(){
+  const cats=[...new Set(videos.map(v=>v.categoria).filter(Boolean))].sort();
+  const cuenta={};videos.forEach(v=>(v.herramientas||[]).forEach(h=>{const k=h.toLowerCase();cuenta[k]=cuenta[k]||{n:0,t:h};cuenta[k].n++}));
+  const hers=Object.values(cuenta).sort((a,b)=>b.n-a.n).slice(0,14).map(x=>x.t);
+  const mk=(id,k,lista)=>{$(id).innerHTML=lista.length?`<span class="chip ${F[k]?'':'on'}" data-k="${k}" data-v="">Todo</span>`+lista.map(v=>`<span class="chip ${F[k]===v?'on':''}" data-k="${k}" data-v="${esc(v)}">${(k==='cat'?(EMO[v]||'')+' ':'')+esc(v)}</span>`).join(''):''};
+  mk('#chCat','cat',cats);mk('#chHer','her',hers);
+}
+
+function pintar(){
+  pintarChips();
+  for(const [id,v] of [['nTodos','todos'],['nFav','fav'],['nPend','pend']])$('#'+id).classList.toggle('on',F.vista===v);
+  const vs=filtrados();
+  $('#lista').innerHTML=vs.length?vs.map(v=>`<div class="v" data-id="${v.id}">
+    <div class="th">${v.con_imagen?`<img loading="lazy" src="${API}/img/${v.id}" alt="">`:(EMO[v.categoria]||'🎬')}</div>
+    <div class="bd"><h3>${esc(v.titulo)}</h3><p>${esc(v.resumen||'')}</p>
+    <div class="row"><span class="chip mini">${esc(v.categoria)}</span>${(v.herramientas||[]).slice(0,3).map(h=>`<span class="chip mini tool">${esc(h)}</span>`).join('')}</div></div>
+    <span class="st">${v.favorito?'⭐':''}${v.probado?'✅':''}</span></div>`).join('')
+    :`<div class="empty">${videos.length||F.q?'Nada con ese filtro.':'Aún no hay vídeos.<br>Comparte un TikTok o Instagram a esta app, o pulsa +'}</div>`;
+}
+
+/* ------------- detalle ------------- */
+function abrir(id){
+  const v=videos.find(x=>x.id===id);if(!v)return;
+  const s=document.createElement('div');s.className='sheet';
+  const pasos=(v.puntos_clave||[]).map(p=>`<li>${esc(p)}</li>`).join('');
+  const prom=(v.prompts||[]).map((p,i)=>`<pre>${esc(p)}</pre><button class="btn sec sm" data-cp="${i}">Copiar</button>`).join('<br>');
+  s.innerHTML=`<div class="top"><button class="btn sec" id="x">← Volver</button><span style="flex:1"></span>
+    <button class="btn sec" id="pr">${v.probado?'✅ Probado':'☐ Probado'}</button><button class="btn sec" id="fv">${v.favorito?'⭐':'☆'}</button></div>
+  ${v.con_imagen?`<img src="${API}/img/${v.id}" alt="" style="width:100%;max-height:300px;object-fit:cover;border-radius:16px;margin-bottom:8px">`:''}
+  <h2 style="margin:4px 0">${esc(v.titulo)}</h2>
+  <div class="row"><span class="chip mini">${esc(v.categoria)}</span>${(v.herramientas||[]).map(h=>`<span class="chip mini tool">${esc(h)}</span>`).join('')}
+  ${(v.etiquetas||[]).map(t=>`<span class="chip mini">#${esc(t)}</span>`).join('')}</div>
+  <p class="muted">${esc(v.plataforma||'')}${v.autor?' · @'+esc(v.autor.replace(/^@/,'')):''}</p>
+  <p>${esc(v.resumen||'')}</p>
+  ${v.accion?`<div class="box">👉 ${esc(v.accion)}</div>`:''}
+  ${pasos?`<h3>Ideas clave</h3><ul class="k">${pasos}</ul>`:''}
+  ${prom?`<h3>Prompts</h3>${prom}`:''}
+  <h3>Notas</h3><textarea id="nt" placeholder="Tus notas…">${esc(v.notas||'')}</textarea>
+  <div class="row" style="margin-top:12px">
+    ${v.url?`<a class="btn sec" style="text-decoration:none" href="${esc(v.url)}" target="_blank" rel="noopener">Ver vídeo</a>`:''}
+    ${!v.con_imagen&&v.url?'<button class="btn sec" id="ft">Obtener portada</button>':''}
+    <button class="btn sec" id="tr">Ver transcripción</button>
+    <button class="btn sec" id="ed">Editar</button>
+    <button class="btn del" id="bo">Borrar</button></div>
+  <div id="trx"></div>`;
+  document.body.appendChild(s);
+  const cerrar=()=>{s.remove();pintar()};
+  const patch=(d)=>api('/videos/'+v.id,{method:'PATCH',body:JSON.stringify(d)}).catch(e=>toast(e.message));
+  s.querySelector('#x').onclick=cerrar;
+  s.querySelector('#fv').onclick=()=>{v.favorito=!v.favorito;s.querySelector('#fv').textContent=v.favorito?'⭐':'☆';patch({favorito:v.favorito})};
+  s.querySelector('#pr').onclick=()=>{v.probado=!v.probado;s.querySelector('#pr').textContent=v.probado?'✅ Probado':'☐ Probado';patch({probado:v.probado})};
+  s.querySelector('#nt').onchange=e=>{v.notas=e.target.value;patch({notas:v.notas})};
+  s.querySelectorAll('[data-cp]').forEach(b=>b.onclick=async()=>{try{await navigator.clipboard.writeText(v.prompts[+b.dataset.cp]);toast('Copiado')}catch{toast('No se pudo copiar')}});
+  s.querySelector('#bo').onclick=async()=>{if(!confirm('¿Borrar este vídeo?'))return;await api('/videos/'+v.id,{method:'DELETE'});videos=videos.filter(x=>x.id!==v.id);cerrar()};
+  s.querySelector('#ed').onclick=()=>editar(v,s);
+  s.querySelector('#tr').onclick=async()=>{const b=s.querySelector('#tr');b.disabled=true;
+    try{const d=await api('/transcripcion/'+v.id);s.querySelector('#trx').innerHTML=`<h3>Lo que se dice</h3><pre>${esc(d.transcripcion||'(sin audio transcrito)')}</pre>${d.descripcion?`<h3>Descripción original</h3><pre>${esc(d.descripcion)}</pre>`:''}`;b.remove()}
+    catch(e){toast(e.message);b.disabled=false}};
+  const ft=s.querySelector('#ft');
+  if(ft)ft.onclick=async()=>{ft.disabled=true;ft.textContent='Buscando…';
+    try{await api('/videos/'+v.id+'/imagen',{method:'POST'});v.con_imagen=true;s.remove();pintar();abrir(v.id)}
+    catch(e){toast(e.message,5000);ft.disabled=false;ft.textContent='Obtener portada'}};
+}
+
+function editar(v,padre){
+  const s=document.createElement('div');s.className='sheet';
+  const cats=[...new Set([...opc.categorias,v.categoria])];
+  s.innerHTML=`<div class="top"><button class="btn sec" id="x">← Cancelar</button></div><h2>Editar</h2>
+  <label class="muted">Título</label><input id="e1" value="${esc(v.titulo)}"><br><br>
+  <label class="muted">Categoría</label><select id="e2">${cats.map(c=>`<option ${c===v.categoria?'selected':''}>${esc(c)}</option>`).join('')}</select><br><br>
+  <label class="muted">Herramientas (separadas por comas)</label><input id="e3" value="${esc((v.herramientas||[]).join(', '))}"><br><br>
+  <label class="muted">Etiquetas (separadas por comas)</label><input id="e4" value="${esc((v.etiquetas||[]).join(', '))}"><br><br>
+  <button class="btn" id="ok">Guardar</button>`;
+  document.body.appendChild(s);
+  s.querySelector('#x').onclick=()=>s.remove();
+  const lista=x=>x.split(',').map(t=>t.trim()).filter(Boolean);
+  s.querySelector('#ok').onclick=async()=>{
+    const d={titulo:s.querySelector('#e1').value.trim()||v.titulo,categoria:s.querySelector('#e2').value,
+      herramientas:lista(s.querySelector('#e3').value),etiquetas:lista(s.querySelector('#e4').value).map(t=>t.toLowerCase())};
+    try{const n=await api('/videos/'+v.id,{method:'PATCH',body:JSON.stringify(d)});Object.assign(v,n);s.remove();padre.remove();pintar();abrir(v.id)}catch(e){toast(e.message)}
+  };
+}
+
+/* ------------- importar uno ------------- */
+async function importar(entrada,extra=''){
+  if(!TOKEN){pendiente=entrada;return pedirToken()}
+  const s=document.createElement('div');s.className='sheet';
+  s.innerHTML=`<h2 style="margin-top:40px"><span class="spin"></span>Leyendo el vídeo…</h2>
+  <p class="muted">Descargando, transcribiendo y catalogando. Tarda entre 10 y 40 segundos.</p>`;
+  document.body.appendChild(s);
+  try{
+    const d=await api('/importar',{method:'POST',body:JSON.stringify({entrada,texto_extra:extra})});
+    s.remove();
+    if(!videos.find(x=>x.id===d.video.id))videos.unshift(d.video);
+    F={...F,q:'',cat:'',her:'',vista:'todos'};$('#q').value='';pintar();
+    toast(d.repetido?'Ya lo tenías guardado':(d.aviso||'Guardado y catalogado'));abrir(d.video.id);
+  }catch(e){
+    s.remove();
+    if(e.codigo==='sin_media')pedirTexto(entrada,e.message);else toast(e.message,6000);
+  }
+}
+function pedirTexto(entrada,msg){
+  const s=document.createElement('div');s.className='sheet';
+  s.innerHTML=`<div class="top"><button class="btn sec" id="x">Cancelar</button></div><h2>Falta texto</h2><p class="muted">${esc(msg)}</p>
+  <textarea id="tx" placeholder="Pega aquí la descripción del vídeo o lo que cuenta…"></textarea><br><br><button class="btn" id="ok">Intentar de nuevo</button>`;
+  document.body.appendChild(s);
+  s.querySelector('#x').onclick=()=>s.remove();
+  s.querySelector('#ok').onclick=()=>{const t=s.querySelector('#tx').value.trim();if(!t)return;s.remove();importar(entrada,t)};
+}
+function nuevo(){
+  const s=document.createElement('div');s.className='sheet';
+  s.innerHTML=`<div class="top"><button class="btn sec" id="x">Cancelar</button></div><h2>Añadir vídeo</h2>
+  <p class="muted">Pega un enlace de TikTok, Instagram o YouTube (o directamente un texto).</p>
+  <textarea id="en" placeholder="https://vm.tiktok.com/…"></textarea><br><br>
+  <button class="btn" id="ok">Guardar</button>
+  <p style="margin-top:28px"><button class="btn sec" id="mu">📥 Importar muchos de golpe (mis guardados)</button></p>`;
+  document.body.appendChild(s);
+  s.querySelector('#x').onclick=()=>s.remove();
+  s.querySelector('#ok').onclick=()=>{const t=s.querySelector('#en').value.trim();if(!t)return;s.remove();importar(t)};
+  s.querySelector('#mu').onclick=()=>{s.remove();varios()};
+}
+
+/* ------------- importar muchos ------------- */
+const HOSTS=/tiktok\.com|tiktokv\.com|instagram\.com|youtube\.com|youtu\.be/i;
+function extraerUrls(txt){
+  txt=txt.replace(/\\\//g,'/');
+  const set=new Map();
+  for(const u of (txt.match(/https?:\/\/[^\s"'<>\\)\]]+/g)||[])){
+    if(!HOSTS.test(u))continue;
+    if(/instagram\.com\/(?!p\/|reel|tv\/)/i.test(u))continue;       // solo publicaciones/reels
+    const k=u.split('?')[0].replace(/\/$/,'');
+    if(!set.has(k))set.set(k,u);
+  }
+  return [...set.values()];
+}
+function varios(){
+  const s=document.createElement('div');s.className='sheet';
+  s.innerHTML=`<div class="top"><button class="btn sec" id="x">← Cerrar</button></div><h2>Importar muchos</h2>
+  <p class="muted"><b>Opción A:</b> pega aquí todos los enlaces (uno por línea).<br>
+  <b>Opción B:</b> en TikTok: Ajustes → Cuenta → <i>Descargar tus datos</i> (formato JSON); abre el archivo y súbelo aquí. Detecto solo los enlaces de tus favoritos. En Instagram: Configuración → Tu actividad → <i>Descargar tu información</i> (JSON) → publicaciones guardadas.</p>
+  <input type="file" id="fi" accept=".json,.txt,.csv,.html" multiple><br><br>
+  <textarea id="ta" placeholder="https://www.tiktok.com/@…&#10;https://www.instagram.com/reel/…"></textarea>
+  <p class="muted" id="cnt"></p>
+  <button class="btn" id="go">Empezar</button>
+  <div id="pg" class="hide"><div class="prog"><i id="bar"></i></div><p id="et" class="muted"></p><div class="lg" id="lg"></div><br>
+  <button class="btn sec" id="st">Parar</button></div>`;
+  document.body.appendChild(s);
+  const ta=s.querySelector('#ta');let parar=false,corriendo=false;
+  const cuenta=()=>{s.querySelector('#cnt').textContent=extraerUrls(ta.value).length+' enlaces detectados'};
+  ta.oninput=cuenta;
+  s.querySelector('#fi').onchange=async e=>{for(const f of e.target.files)ta.value+='\n'+await f.text();cuenta()};
+  s.querySelector('#x').onclick=()=>{if(corriendo&&!confirm('Hay una importación en marcha. ¿Parar y cerrar?'))return;parar=true;s.remove();cargar()};
+  s.querySelector('#st').onclick=()=>{parar=true;s.querySelector('#st').textContent='Parando…'};
+  s.querySelector('#go').onclick=async()=>{
+    const urls=extraerUrls(ta.value);if(!urls.length)return toast('No encuentro enlaces');
+    if(urls.length>40&&!confirm(urls.length+' vídeos pueden tardar mucho (≈20-30 s cada uno). Mantén la app abierta y la pantalla encendida. ¿Seguir?'))return;
+    corriendo=true;s.querySelector('#go').classList.add('hide');ta.classList.add('hide');s.querySelector('#fi').classList.add('hide');s.querySelector('#cnt').classList.add('hide');s.querySelector('#pg').classList.remove('hide');
+    let wl=null;try{wl=await navigator.wakeLock.request('screen')}catch{}
+    const lg=s.querySelector('#lg');let ok=0,rep=0,mal=[];
+    const log=(t)=>{const d=document.createElement('div');d.textContent=t;lg.appendChild(d);lg.scrollTop=lg.scrollHeight};
+    for(let i=0;i<urls.length&&!parar;i++){
+      s.querySelector('#et').textContent=`Procesando ${i+1} de ${urls.length}…  ✅ ${ok}  ♻️ ${rep}  ⚠️ ${mal.length}`;
+      s.querySelector('#bar').style.width=(i/urls.length*100)+'%';
+      try{
+        const d=await api('/importar',{method:'POST',body:JSON.stringify({entrada:urls[i],texto_extra:''})});
+        if(d.repetido){rep++;log('♻️ ya estaba: '+d.video.titulo)}else{ok++;videos.unshift(d.video);log('✅ '+d.video.titulo)}
+      }catch(e){mal.push(urls[i]);log('⚠️ '+e.message.slice(0,60)+' — '+urls[i])}
+      await dormir(1500);
+    }
+    corriendo=false;try{wl&&wl.release()}catch{}
+    s.querySelector('#bar').style.width='100%';
+    s.querySelector('#et').innerHTML=`<b>${parar?'Parado':'Terminado'}.</b> Guardados: ${ok} · Ya estaban: ${rep} · Fallaron: ${mal.length}`;
+    s.querySelector('#st').textContent='Listo';s.querySelector('#st').onclick=()=>{s.remove();cargar()};
+    if(mal.length){const b=document.createElement('button');b.className='btn sec';b.textContent='Copiar los que fallaron';b.style.marginLeft='8px';
+      b.onclick=async()=>{try{await navigator.clipboard.writeText(mal.join('\n'));toast('Copiados')}catch{toast('No se pudo copiar')}};s.querySelector('#pg').appendChild(b)}
+  };
+}
+
+/* ------------- eventos ------------- */
+let tq=null;
+$('#q').oninput=e=>{
+  F.q=e.target.value.trim();clearTimeout(tq);
+  tq=setTimeout(()=>{F.q.length>=2?cargar(F.q):cargar()},350);
+};
+document.addEventListener('click',e=>{
+  const ch=e.target.closest('.chip[data-k]');if(ch){F[ch.dataset.k]=ch.dataset.v;pintar();return}
+  const cd=e.target.closest('.v[data-id]');if(cd)abrir(cd.dataset.id);
+});
+$('#fab').onclick=nuevo;
+$('#nTodos').onclick=()=>{F.vista='todos';pintar()};
+$('#nFav').onclick=()=>{F.vista='fav';pintar()};
+$('#nPend').onclick=()=>{F.vista='pend';pintar()};
+
+(async function init(){
+  if('serviceWorker' in navigator)navigator.serviceWorker.register('/ia/sw.js',{scope:'/ia/'}).catch(()=>{});
+  try{opc=await (await fetch(API+'/opciones')).json()}catch{}
+  const p=new URLSearchParams(location.search);
+  const compartido=[p.get('url'),p.get('text'),p.get('title')].filter(Boolean).join(' ').trim();
+  if(compartido)history.replaceState(null,'','/ia/');
+  if(!TOKEN){if(compartido)pendiente=compartido;pedirToken();return}
+  await cargar();
+  if(compartido)importar(compartido);
+})();
+</script>
+</body>
+</html>
